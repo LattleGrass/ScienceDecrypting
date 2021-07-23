@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 
 import base64
-from io import SEEK_END, SEEK_SET
 import sys
 import traceback
 import requests

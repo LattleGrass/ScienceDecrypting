@@ -1,0 +1,3 @@
+reqeusts
+pypdf2
+cryptography

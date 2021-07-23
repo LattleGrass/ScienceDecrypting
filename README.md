@@ -21,3 +21,5 @@ Options:
 
 Example: python3 decrypt.py -i test.pdf -o test_dec.pdf
 ```
+## 科学文库无限制下载 
+暂不提供，有需要请提issue

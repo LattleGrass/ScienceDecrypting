@@ -1,5 +1,8 @@
 ## Description
-破解科学文库下载的PDF文件，转为正常的PDF文件格式，去除文件有效期限制，普通PDF阅读器也可以打开。
+破解CAJViewer加有效期限制的文档，无损转为普通PDF格式文件，保留文字和目录，支持解密以下网站下载的文档：
+- 科学文库 ( https://book.sciencereading.cn )
+- 国家标准全文数据库 ( https://kns.cnki.net/kns8?dbcode=CISD / https://www.spc.org.cn/ )
+- 其他，待验证...
 
 ## Requirements
 ### Python3

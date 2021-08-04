@@ -173,12 +173,7 @@ def decrypt_file(src, dest):
         # find rights
         fp.seek(int(m.group(1)), os.SEEK_SET)
         eof_offset = int(m.group(1)) - 13
-        right_meta = fp.read()
-        m = re.search(
-            r"\<right-meta\>[\s\S]+\</right-meta\>", right_meta.decode("latin"))
-        if not m:
-            raise CustomException("Can't find right meta: ", right_meta)
-        right_meta = m.group(0)
+        right_meta = fp.read(int(m.group(2))).decode("latin")
     # request stage 1 password
     root = ElementTree.fromstring(right_meta)
     drm_url = root.find("./protect/auth/permit/server/url").text

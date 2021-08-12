@@ -160,6 +160,16 @@ def decrypt_file_key(password_from_file, password_from_server, iv_from_file, rig
     return m.digest()[:0x10]
 
 
+def bookmark(outlines, parent, output, input_):
+    prev_mark = parent
+    for mark in outlines:
+        if isinstance(mark, list):
+            bookmark(mark, prev_mark, output, input_)
+        else:
+            mark_number = input_.getDestinationPageNumber(mark)
+            prev_mark = output.addBookmark(
+                title = mark.title, pagenum = mark_number, parent = parent, fit = mark.typ)
+
 def decrypt_file(src, dest):
     print("[Log] 解析源文件....")
     with open(src, "rb") as fp:
@@ -208,7 +218,9 @@ def decrypt_file(src, dest):
     for i in range(input_.getNumPages()):
         print(".", end="", flush=True)
         output.addPage(input_.getPage(i))
-    print("\n[Log] 写入文件")
+    print("\n[Log] 生成目录")
+    bookmark(input_.outlines, None, output, input_)
+    print("[Log] 写入文件")
     outputStream = open(dest, "wb")
     output.write(outputStream)
     temp_fp.close()

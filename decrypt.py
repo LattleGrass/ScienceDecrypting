@@ -168,7 +168,7 @@ def bookmark(outlines, parent, output, input_):
         else:
             mark_number = input_.getDestinationPageNumber(mark)
             prev_mark = output.addBookmark(
-                title = mark.title, pagenum = mark_number, parent = parent, fit = mark.typ)
+                title = mark.title, pagenum = mark_number, parent = parent)
 
 def decrypt_file(src, dest):
     print("[Log] 解析源文件....")

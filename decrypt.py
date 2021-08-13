@@ -166,9 +166,8 @@ def bookmark(outlines, parent, output, input_):
         if isinstance(mark, list):
             bookmark(mark, prev_mark, output, input_)
         else:
-            mark_number = input_.getDestinationPageNumber(mark)
-            prev_mark = output.addBookmark(
-                title = mark.title, pagenum = mark_number, parent = parent)
+            pagenum = input_.getDestinationPageNumber(mark)
+            prev_mark = output.addBookmark(mark.title, pagenum, parent)
 
 def decrypt_file(src, dest):
     print("[Log] 解析源文件....")
@@ -219,7 +218,10 @@ def decrypt_file(src, dest):
         print(".", end="", flush=True)
         output.addPage(input_.getPage(i))
     print("\n[Log] 生成目录")
-    bookmark(input_.outlines, None, output, input_)
+    try:
+        bookmark(input_.getOutlines(), None, output, input_)
+    except:
+        print("[Log] 生成目录失败")
     print("[Log] 写入文件")
     outputStream = open(dest, "wb")
     output.write(outputStream)

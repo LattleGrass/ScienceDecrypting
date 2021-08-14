@@ -205,10 +205,8 @@ def decrypt_file(src, dest):
     input_.SetFileKey(file_key)
     input_.strict = False
     print("[Log] 文件 {} 共 {} 页.".format(src, input_.getNumPages()))
-    for i in range(input_.getNumPages()):
-        print(".", end="", flush=True)
-        output.addPage(input_.getPage(i))
-    print("\n[Log] 写入文件")
+    output.cloneReaderDocumentRoot(input_)
+    print("[Log] 写入文件")
     outputStream = open(dest, "wb")
     output.write(outputStream)
     temp_fp.close()

@@ -19,7 +19,7 @@ jobs:
           pip install pyinstaller
           pip install -r requirements.txt
       - name: build artifact
-        run: pyinstall -F -w -n ScienceDecrypting gui.py
+        run: pyinstaller -F -w -n ScienceDecrypting gui.py
       - name: upload artifact
         uses: actions/upload-artifact@v2
         with:

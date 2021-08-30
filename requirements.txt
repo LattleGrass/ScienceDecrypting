@@ -1,3 +1,4 @@
 requests
 pypdf2
 cryptography
+pikepdf

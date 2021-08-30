@@ -10,8 +10,10 @@ import hashlib
 import tempfile
 from xml.etree import ElementTree
 from optparse import OptionParser
-from utils import CustomException, aes_decrypt, patch_pypdf2
-import PyPDF2
+import hashlib
+from cryptography.hazmat.primitives.ciphers import Cipher, modes, algorithms
+from cryptography.hazmat.primitives import padding
+from pikepdf import Pdf
 
 req_data = """<?xml version="1.0" encoding="UTF-8"?>
 <auth-req>
@@ -21,6 +23,20 @@ req_data = """<?xml version="1.0" encoding="UTF-8"?>
 """
 iv_first = b"200CFC8299B84aa980E945F63D3EF48D"
 iv_first = iv_first[:16]
+
+
+class CustomException(Exception):
+    pass
+
+
+def aes_decrypt(key, iv, data, pad=False):
+    cipher = Cipher(algorithms.AES(key), modes.CBC(iv))
+    dec = cipher.decryptor()
+    ret = dec.update(data) + dec.finalize()
+    if not pad:
+        return ret
+    unpadder = padding.PKCS7(128).unpadder()
+    return unpadder.update(ret) + unpadder.finalize()
 
 
 def request_password(url, file_id):
@@ -70,7 +86,7 @@ def decrypt_file(src, dest):
         fp.seek(0, os.SEEK_END)
         fp.seek(fp.tell() - 30, os.SEEK_SET)
         tail = fp.read()
-        m = re.search(r"startrights (\d+),(\d+)", tail.decode("latin"))
+        m = re.search(rb"startrights (\d+),(\d+)", tail)
         if not m:
             raise CustomException("文件格式错误 {}".format(tail))
         # find rights
@@ -97,22 +113,34 @@ def decrypt_file(src, dest):
                                 stripped_right_meta.encode("ascii"),
                                 rights)
     print("[Log] 解密文件...")
-    origin_fp = open(src, "rb")
+    src_fp = open(src, "rb")
     temp_fp = tempfile.TemporaryFile()
-    temp_fp.write(origin_fp.read(eof_offset))
-    origin_fp.close()
-    temp_fp.seek(0, os.SEEK_SET)
 
-    output = PyPDF2.PdfFileWriter()
-    input_ = PyPDF2.PdfFileReader(temp_fp)
-    input_.SetFileKey(file_key)
-    input_.strict = False
-    print("[Log] 文件 {} 共 {} 页.".format(src, input_.getNumPages()))
-    output.cloneReaderDocumentRoot(input_)
+    # fix pdf format
+    src_fp.seek(eof_offset - 40, os.SEEK_SET)
+    content = src_fp.read(40)
+    m = re.search(rb'startxref\s+(\d+)\s', content)
+    if not m:
+        raise CustomException("unable to find xref")
+    src_fp.seek(0, os.SEEK_SET)
+    temp_fp.write(src_fp.read(int(m.group(1)) - 512))
+    encryption_obj = b"<</Filter /Standard /V 4 /Length 128 /R 4 /O <1> /U <1> /P -4 /CF << /StdCF << /Type /CryptAlgorithm /CFM /AESV2 /AuthEvent /DocOpen >> >> /StrF /StdCF /StmF /StdCF>>"
+    for line in src_fp:
+        if b"%%EOF" in line:
+            temp_fp.write(b"%%EOF")
+            break
+        if b"SubFilter/TTKN.PubSec.s1" in line:
+            origin_len = len(line)
+            line = encryption_obj + b"\n" * (origin_len - len(encryption_obj))
+        temp_fp.write(line)
+    src_fp.close()
+    temp_fp.seek(0, os.SEEK_SET)
+    out = open(dest, "wb")
+
     print("[Log] 写入文件")
-    outputStream = open(dest, "wb")
-    output.write(outputStream)
+    Pdf.open(temp_fp, password=file_key.hex(), hex_password=True).save(out)
     temp_fp.close()
+    out.close()
     print("[Success] 解密成功!")
 
 
@@ -135,8 +163,7 @@ def main():
         ans = input("文件 {} 已存在，继续运行将覆盖该文件，是否继续 [y/N]: ".format(options.dst))
         if ans.lower() not in ["y", "yes"]:
             exit(0)
-    # patch PyPDF2 to support aes encryption and fix some bug
-    patch_pypdf2()
+
     decrypt_file(options.src, options.dst)
 
 

@@ -4,7 +4,7 @@ import threading
 import tkinter as tk
 from tkinter.filedialog import askopenfile
 
-from decrypt import patch_pypdf2, decrypt_file, CustomException
+from decrypt import decrypt_file, CustomException
 
 
 class StdoutRedirector(object):
@@ -31,7 +31,6 @@ def open_file():
 
 
 def decrypt_background(src, dst):
-    patch_pypdf2()
     try:
         decrypt_file(src, dst)
         print("解密成功！解密后的文件为：", dst)
@@ -47,6 +46,7 @@ def decrypt_background(src, dst):
 
 if __name__ == "__main__":
     root = tk.Tk()
+    root.title("ScienceDecrypting")
     root.geometry("800x600")
     btn = tk.Button(root, text='选择要解密的文件', command=lambda: open_file())
     btn.pack(side=tk.TOP, pady=20)

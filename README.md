@@ -7,11 +7,12 @@
 ## Usage
 
 ### 使用预编译的exe文件
-在[Release页面](https://github.com/301Moved/ScienceDecrypting/releases)下载exe文件执行即可
+在[Release页面](https://github.com/301Moved/ScienceDecrypting/releases)下载exe文件执行即可。
 
 ### 使用源码文件
-1. 下载安装Python3 ( https://www.python.org/downloads/ )
-2. 安装依赖 
+1. 下载安装Python3 ( https://www.python.org/downloads/ )。
+2. 下载源码库，点击右上角Code按钮并选择Download ZIP。完整解压压缩包，并进入文件夹，在文件夹地址栏输入cmd并回车以启动在当前目录下运行的cmd程序。
+3. 安装依赖 。
 ```bash
 pip3 install -U pip
 pip3 install -r requirements.txt

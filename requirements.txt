@@ -1,3 +1,3 @@
-requests
-pypdf2
-cryptography
+requests==2.22.0
+cryptography==3.4.8
+pikepdf==3.0.0

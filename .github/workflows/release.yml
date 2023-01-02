@@ -1,0 +1,27 @@
+name: Release ScienceDecrypting
+
+on: [create]
+
+jobs:
+  build:
+    if: ${{ startsWith(github.ref,'refs/tags/') }}
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v2
+      - name: Set up Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: 3.6
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pyinstaller
+          pip install -r requirements.txt
+      - name: build artifact
+        run: pyinstaller -F -w -n ScienceDecrypting gui.py
+      - name: upload artifact
+        uses: actions/upload-artifact@v2
+        with:
+          name: ScienceDecrypting.exe
+          path: dist/ScienceDecrypting.exe 

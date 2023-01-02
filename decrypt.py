@@ -10,10 +10,10 @@ import hashlib
 import tempfile
 from xml.etree import ElementTree
 from optparse import OptionParser
+import hashlib
 from cryptography.hazmat.primitives.ciphers import Cipher, modes, algorithms
 from cryptography.hazmat.primitives import padding
-import PyPDF2
-from PyPDF2.generic import *
+from pikepdf import Pdf
 
 req_data = """<?xml version="1.0" encoding="UTF-8"?>
 <auth-req>
@@ -37,87 +37,6 @@ def aes_decrypt(key, iv, data, pad=False):
         return ret
     unpadder = padding.PKCS7(128).unpadder()
     return unpadder.update(ret) + unpadder.finalize()
-
-
-class MyPdfFileReader(PyPDF2.PdfFileReader):
-    def SetFileKey(self, key):
-        self._decryption_key = key
-        self._override_encryption = False
-
-    def _decrypt(self, password):
-        pass
-
-    def getObject(self, indirectReference):
-        debug = False
-        if debug:
-            print(("looking at:", indirectReference.idnum,
-                  indirectReference.generation))
-        retval = self.cacheGetIndirectObject(indirectReference.generation,
-                                             indirectReference.idnum)
-        if retval != None:
-            return retval
-        if indirectReference.generation == 0 and \
-                indirectReference.idnum in self.xref_objStm:
-            retval = self._getObjectFromStream(indirectReference)
-        elif indirectReference.generation in self.xref and \
-                indirectReference.idnum in self.xref[indirectReference.generation]:
-            start = self.xref[indirectReference.generation][indirectReference.idnum]
-            if debug:
-                print(("  Uncompressed Object", indirectReference.idnum,
-                      indirectReference.generation, ":", start))
-            self.stream.seek(start, 0)
-            idnum, generation = self.readObjectHeader(self.stream)
-            if idnum != indirectReference.idnum and self.xrefIndex:
-                # Xref table probably had bad indexes due to not being zero-indexed
-                if self.strict:
-                    raise utils.PdfReadError("Expected object ID (%d %d) does not match actual (%d %d); xref table not zero-indexed."
-                                             % (indirectReference.idnum, indirectReference.generation, idnum, generation))
-                else:
-                    pass  # xref table is corrected in non-strict mode
-            elif idnum != indirectReference.idnum:
-                # some other problem
-                raise utils.PdfReadError("Expected object ID (%d %d) does not match actual (%d %d)."
-                                         % (indirectReference.idnum, indirectReference.generation, idnum, generation))
-            assert generation == indirectReference.generation
-            retval = readObject(self.stream, self)
-
-            # override encryption is used for the /Encrypt dictionary
-            if not self._override_encryption and self.isEncrypted:
-                # if we don't have the encryption key:
-                if not hasattr(self, '_decryption_key'):
-                    raise utils.PdfReadError("file has not been decrypted")
-                # otherwise, decrypt here...
-                import struct
-                pack1 = struct.pack("<i", indirectReference.idnum)[:3]
-                pack2 = struct.pack("<i", indirectReference.generation)[:2]
-                key = self._decryption_key + pack1 + pack2 + b'sAlT'
-                assert len(key) == (len(self._decryption_key) + 9)
-                md5_hash = hashlib.md5(key).digest()
-                key = md5_hash[:min(16, len(self._decryption_key) + 5)]
-                retval = self._decryptObject(retval, key)
-        else:
-            warnings.warn("Object %d %d not defined." % (indirectReference.idnum,
-                                                         indirectReference.generation), utils.PdfReadWarning)
-            # if self.strict:
-            raise utils.PdfReadError("Could not find object.")
-        self.cacheIndirectObject(indirectReference.generation,
-                                 indirectReference.idnum, retval)
-        return retval
-
-    def _decryptObject(self, obj, key):
-        if isinstance(obj, ByteStringObject) or isinstance(obj, TextStringObject):
-            obj = createStringObject(aes_decrypt(
-                key, obj.original_bytes[:len(key)], obj.original_bytes[len(key):], True))
-        elif isinstance(obj, StreamObject):
-            obj._data = aes_decrypt(
-                key, obj._data[:len(key)], obj._data[len(key):], True)
-        elif isinstance(obj, DictionaryObject):
-            for dictkey, value in list(obj.items()):
-                obj[dictkey] = self._decryptObject(value, key)
-        elif isinstance(obj, ArrayObject):
-            for i in range(len(obj)):
-                obj[i] = self._decryptObject(obj[i], key)
-        return obj
 
 
 def request_password(url, file_id):
@@ -167,7 +86,7 @@ def decrypt_file(src, dest):
         fp.seek(0, os.SEEK_END)
         fp.seek(fp.tell() - 30, os.SEEK_SET)
         tail = fp.read()
-        m = re.search(r"startrights (\d+),(\d+)", tail.decode("latin"))
+        m = re.search(rb"startrights (\d+),(\d+)", tail)
         if not m:
             raise CustomException("文件格式错误 {}".format(tail))
         # find rights
@@ -194,24 +113,34 @@ def decrypt_file(src, dest):
                                 stripped_right_meta.encode("ascii"),
                                 rights)
     print("[Log] 解密文件...")
-    origin_fp = open(src, "rb")
+    src_fp = open(src, "rb")
     temp_fp = tempfile.TemporaryFile()
-    temp_fp.write(origin_fp.read(eof_offset))
-    origin_fp.close()
-    temp_fp.seek(0, os.SEEK_SET)
 
-    output = PyPDF2.PdfFileWriter()
-    input_ = MyPdfFileReader(temp_fp)
-    input_.SetFileKey(file_key)
-    input_.strict = False
-    print("[Log] 文件 {} 共 {} 页.".format(src, input_.getNumPages()))
-    for i in range(input_.getNumPages()):
-        print(".", end="", flush=True)
-        output.addPage(input_.getPage(i))
-    print("\n[Log] 写入文件")
-    outputStream = open(dest, "wb")
-    output.write(outputStream)
+    # fix pdf format
+    src_fp.seek(eof_offset - 40, os.SEEK_SET)
+    content = src_fp.read(40)
+    m = re.search(rb'startxref\s+(\d+)\s', content)
+    if not m:
+        raise CustomException("unable to find xref")
+    src_fp.seek(0, os.SEEK_SET)
+    temp_fp.write(src_fp.read(int(m.group(1)) - 512))
+    encryption_obj = b"<</Filter /Standard /V 4 /Length 128 /R 4 /O <1> /U <1> /P -4 /CF << /StdCF << /Type /CryptAlgorithm /CFM /AESV2 /AuthEvent /DocOpen >> >> /StrF /StdCF /StmF /StdCF>>"
+    for line in src_fp:
+        if b"%%EOF" in line:
+            temp_fp.write(b"%%EOF")
+            break
+        if b"SubFilter/TTKN.PubSec.s1" in line:
+            origin_len = len(line)
+            line = encryption_obj + b"\n" * (origin_len - len(encryption_obj))
+        temp_fp.write(line)
+    src_fp.close()
+    temp_fp.seek(0, os.SEEK_SET)
+    out = open(dest, "wb")
+
+    print("[Log] 写入文件")
+    Pdf.open(temp_fp, password=file_key.hex(), hex_password=True).save(out)
     temp_fp.close()
+    out.close()
     print("[Success] 解密成功!")
 
 
@@ -234,6 +163,7 @@ def main():
         ans = input("文件 {} 已存在，继续运行将覆盖该文件，是否继续 [y/N]: ".format(options.dst))
         if ans.lower() not in ["y", "yes"]:
             exit(0)
+
     decrypt_file(options.src, options.dst)
 
 
